@@ -1,28 +1,23 @@
 /**
- * Minimalized Skibidi bot server
- * Đã loại bỏ hoàn toàn các tính năng liên quan đến nhạc.
+ * Skibidi Bot Server - Full Edition
+ * Manager, Minigames, Economy & Leaderboard
+ * Credit: by ski_shimano
  */
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
-const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder } = require('discord.js');
 
 const { loadData: loadFromDb, saveData: saveToDb } = (() => {
-  try {
-    return require('./db');
-  } catch (e) {
-    return {};
-  }
+  try { return require('./db'); } catch (e) { return {}; }
 })();
 
-// === WEB SERVER ===
 const app = express();
 app.use(express.json());
-app.get('/', (req, res) => res.send('✅ Bot đang chạy!'));
+app.get('/', (req, res) => res.send('✅ Bot is running! Credit: by ski_shimano'));
 const PORT = process.env.PORT || 10000;
 
-// === DISCORD CLIENT ===
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -34,15 +29,8 @@ const client = new Client({
 
 const PREFIX = '?';
 const TOKEN = process.env.TOKEN;
-const BOT_DASHBOARD_TOKEN = process.env.BOT_DASHBOARD_TOKEN || null;
 
-if (!TOKEN) {
-  console.error('❌ TOKEN không được cung cấp!');
-  process.exit(1);
-}
-
-// === DATA LOADING ===
-const dataPath = path.join(__dirname, 'data.json');
+// === CẤU TRÚC DỮ LIỆU ĐẦY ĐỦ ===
 let data = {
   balances: {},
   warns: {},
@@ -50,10 +38,9 @@ let data = {
   afk: {},
   shops: {},
   inventories: {},
-  tickets: {}
+  tickets: {},
+  cooldowns: {} 
 };
-
-let saveQueue = Promise.resolve();
 
 async function initData() {
   if (process.env.DATABASE_URL && loadFromDb && saveToDb) {
@@ -61,73 +48,20 @@ async function initData() {
       const loaded = await loadFromDb('global');
       if (loaded) data = Object.assign(data, loaded);
       else await saveToDb(data, 'global');
-      console.log('📂 Dữ liệu đã được tải từ Postgres.');
+      console.log('📂 Data synced with Postgres.');
       return;
-    } catch (e) {
-      console.warn('⚠️ Không thể load từ Postgres:', e.message);
-    }
-  }
-
-  if (fs.existsSync(dataPath)) {
-    try {
-      data = Object.assign(data, JSON.parse(fs.readFileSync(dataPath)));
-      console.log('📂 Dữ liệu đã được tải từ data.json.');
-    } catch (e) {
-      console.error('⚠️ Lỗi đọc data.json, tạo mới...');
-    }
-  } else {
-    fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
+    } catch (e) { console.warn('⚠️ DB Load Error:', e.message); }
   }
 }
 
-function saveData() {
+async function saveData() {
   if (process.env.DATABASE_URL && saveToDb) {
-    return saveToDb(data, 'global').catch((e) => console.error('❌ Lỗi lưu vào DB:', e.message));
+    return saveToDb(data, 'global').catch(e => console.error('❌ DB Save Error:', e.message));
   }
-  saveQueue = saveQueue.then(() => {
-    return new Promise((resolve) => {
-      fs.writeFile(dataPath, JSON.stringify(data, null, 2), (err) => {
-        if (err) console.error('❌ Lỗi lưu data:', err.message);
-        resolve();
-      });
-    });
-  });
-  return saveQueue;
 }
-
-// === UTILS ===
-function ensureGuildData(guildId) {
-  if (!data.shops[guildId]) data.shops[guildId] = [];
-  if (!data.inventories[guildId]) data.inventories[guildId] = {};
-  if (!data.tickets[guildId]) data.tickets[guildId] = [];
-}
-
-// === API FOR DASHBOARD ===
-function checkDashboardAuth(req, res, next) {
-  const auth = req.headers.authorization || '';
-  if (!BOT_DASHBOARD_TOKEN) return res.status(403).json({ error: 'BOT_DASHBOARD_TOKEN not configured' });
-  if (auth !== `Bearer ${BOT_DASHBOARD_TOKEN}`) return res.status(401).json({ error: 'Invalid token' });
-  next();
-}
-
-app.get('/api/guilds/:id/shop', checkDashboardAuth, (req, res) => {
-  ensureGuildData(req.params.id);
-  res.json({ shop: data.shops[req.params.id] || [] });
-});
-
-app.post('/api/guilds/:id/shop', checkDashboardAuth, async (req, res) => {
-  const gid = req.params.id;
-  if (!Array.isArray(req.body.shop)) return res.status(400).json({ error: 'shop array required' });
-  ensureGuildData(gid);
-  data.shops[gid] = req.body.shop;
-  await saveData();
-  res.json({ ok: true });
-});
-
-app.listen(PORT, () => console.log(`🌐 Web server chạy tại port ${PORT}`));
 
 // === BOT EVENTS ===
-client.once('ready', () => console.log(`✅ Bot online: ${client.user.tag}`));
+client.once('ready', () => console.log(`✅ Online: ${client.user.tag} | Credit: by ski_shimano`));
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
@@ -136,16 +70,7 @@ client.on('messageCreate', async (message) => {
   if (data.afk[message.author.id]) {
     delete data.afk[message.author.id];
     await saveData();
-    message.reply('✅ Bạn đã quay trở lại, chế độ AFK đã tắt.');
-  }
-
-  if (message.mentions.users.size > 0) {
-    message.mentions.users.forEach((u) => {
-      if (data.afk[u.id]) {
-        const info = data.afk[u.id];
-        message.channel.send(`💤 ${u.tag} đang AFK: ${info.reason} (từ ${new Date(info.since).toLocaleString()})`);
-      }
-    });
+    message.reply('✅ Chào mừng bạn quay trở lại! Đã tắt chế độ AFK.');
   }
 
   if (!message.content.startsWith(PREFIX)) return;
@@ -153,66 +78,80 @@ client.on('messageCreate', async (message) => {
   const cmd = args.shift().toLowerCase();
 
   try {
-    if (cmd === 'ping') return message.reply(`🏓 Pong: ${client.ws.ping}ms`);
-
-    if (cmd === 'afk') {
-      const reason = args.join(' ') || 'Không có lý do';
-      data.afk[message.author.id] = { reason, since: Date.now() };
+    // --- 1. MANAGER COMMANDS ---
+    if (cmd === 'warn') {
+      if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) return message.reply('❌ Bạn không có quyền quản trị viên.');
+      const target = message.mentions.users.first();
+      if (!target) return message.reply('⚠️ Tag người cần cảnh cáo.');
+      if (!data.warns[target.id]) data.warns[target.id] = [];
+      data.warns[target.id].push({ reason: args.slice(1).join(' ') || 'Không lý do', time: Date.now() });
       await saveData();
-      return message.reply(`💤 Bạn đã treo máy: ${reason}`);
+      message.reply(`⚠️ Đã warn **${target.tag}**. Tổng: ${data.warns[target.id].length} lần.`);
     }
 
-    if (cmd === 'shop') {
-      const sub = args.shift();
-      const gid = message.guild.id;
-      ensureGuildData(gid);
-
-      if (!sub || sub === 'list') {
-        const list = data.shops[gid].map(it => `**${it.id}**. ${it.name} — ${it.price} 💰`).join('\n') || 'Shop hiện đang trống.';
-        return message.reply(`🛒 **Cửa hàng của Server:**\n${list}`);
-      }
-
-      if (sub === 'buy') {
-        const id = args[0];
-        const item = data.shops[gid].find(x => String(x.id) === String(id));
-        if (!item) return message.reply('❌ Không tìm thấy vật phẩm này.');
-        
-        const balance = data.balances[message.author.id] || 0;
-        if (balance < item.price) return message.reply('❌ Bạn không đủ tiền!');
-
-        data.balances[message.author.id] = balance - item.price;
-        const inv = data.inventories[gid][message.author.id] || [];
-        const exist = inv.find(i => i.itemId === item.id);
-        
-        if (exist) exist.qty++;
-        else inv.push({ itemId: item.id, qty: 1, name: item.name });
-        
-        data.inventories[gid][message.author.id] = inv;
-        await saveData();
-        return message.reply(`✅ Bạn đã mua thành công **${item.name}**!`);
-      }
-
-      if (sub === 'add' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-        const id = args.shift();
-        const price = parseInt(args.pop());
-        const name = args.join(' ');
-        if (!id || !name || isNaN(price)) return message.reply('❌ Dùng: `?shop add <id> <tên> <giá>`');
-        
-        data.shops[gid].push({ id, name, price });
-        await saveData();
-        return message.reply(`✅ Đã thêm **${name}** vào shop.`);
-      }
+    if (cmd === 'clear') {
+      if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return message.reply('❌ Bạn không có quyền xóa tin nhắn.');
+      const num = parseInt(args[0]) || 10;
+      await message.channel.bulkDelete(Math.min(num, 100), true);
+      message.channel.send(`🧹 Đã dọn dẹp ${num} tin nhắn.`).then(m => setTimeout(() => m.delete(), 2000));
     }
-  } catch (error) {
-    console.error(error);
-    message.reply('❌ Đã xảy ra lỗi khi thực hiện lệnh.');
+
+    // --- 2. ECONOMY & MINIGAMES ---
+    if (cmd === 'work') {
+      const now = Date.now();
+      const last = data.cooldowns[`work_${message.author.id}`] || 0;
+      if (now - last < 3600000) return message.reply(`⏳ Bạn đang mệt, nghỉ ngơi tí đi (Chờ ${Math.ceil((3600000 - (now-last))/60000)} phút).`);
+      
+      const gain = Math.floor(Math.random() * 300) + 100;
+      data.balances[message.author.id] = (data.balances[message.author.id] || 0) + gain;
+      data.cooldowns[`work_${message.author.id}`] = now;
+      await saveData();
+      message.reply(`⚒️ Bạn đã làm việc và nhận được **${gain}** 💰`);
+    }
+
+    if (cmd === 'bal') {
+      const bal = data.balances[message.author.id] || 0;
+      message.reply(`💳 Tài khoản của bạn: **${bal}** 💰`);
+    }
+
+    if (cmd === 'cf') { // Coinflip
+      const bet = parseInt(args[0]);
+      const bal = data.balances[message.author.id] || 0;
+      if (isNaN(bet) || bet <= 0 || bet > bal) return message.reply('❌ Tiền cược không hợp lệ.');
+      const win = Math.random() > 0.5;
+      data.balances[message.author.id] += win ? bet : -bet;
+      await saveData();
+      message.reply(win ? `🪙 **NGỬA!** Bạn thắng **${bet}** 💰` : `🪙 **SẤP!** Bạn mất **${bet}** 💰`);
+    }
+
+    // --- 3. LEADERBOARD ---
+    if (cmd === 'lb' || cmd === 'top') {
+      const sorted = Object.entries(data.balances)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 10);
+      
+      let lbMsg = "🏆 **BẢNG XẾP HẠNG ĐẠI GIA** 🏆\n\n";
+      for (let i = 0; i < sorted.length; i++) {
+        const user = await client.users.fetch(sorted[i][0]).catch(() => ({ tag: 'Người dùng ẩn danh' }));
+        lbMsg += `**#${i + 1}** ${user.tag} — ${sorted[i][1]} 💰\n`;
+      }
+      lbMsg += "\n*By ski_shimano*";
+      message.reply(lbMsg);
+    }
+
+    // --- 4. CREDIT ---
+    if (cmd === 'credit') {
+      message.reply('🛠️ Bot được phát triển bởi: **ski_shimano**');
+    }
+
+  } catch (err) {
+    console.error(err);
+    message.reply('❌ Lỗi thực thi lệnh.');
   }
 });
 
 (async () => {
   await initData();
-  client.login(TOKEN).catch(e => {
-    console.error('❌ Lỗi đăng nhập:', e.message);
-    process.exit(1);
-  });
+  app.listen(PORT, () => console.log(`🌐 Server on port ${PORT}`));
+  client.login(TOKEN);
 })();
