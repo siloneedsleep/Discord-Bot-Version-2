@@ -1,9 +1,35 @@
 {
-    "global": {
-        "balances": {},
-        "coOwners": [],
-        "admins": [],
-        "allowedGuilds": [1410645959813107866],
-        "blacklist": []
+    "balances": {},
+    "bank": {},
+    "inventory": {},
+    "marriages": {},
+    "blacklist": [],
+    "coOwners": [],
+    "admins": [],
+    "allowedGuilds": [
+        "1410645959813107866"
+    ],
+    "crypto": {},
+    "mining": {
+        "pickaxe": {}
+    },
+    "cooldowns": {
+        "global_heist": 0
+    },
+    "notis": {
+        "1410645959813107866": "Chào mừng bạn đến với Skibidi Hub! Hãy sử dụng ski!help để bắt đầu."
+    },
+    "profileBackgrounds": {},
+    "giftcodes": {
+        "SKIBIDI_V2": {
+            "amount": 10000,
+            "uses": 50
+        }
+    },
+    "lottery": [],
+    "auction": {
+        "item": null,
+        "currentBid": 0,
+        "highestBidder": null
     }
 }
