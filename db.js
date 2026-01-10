@@ -1,36 +1,38 @@
-const { Pool } = require('pg');
+const fs = require('fs');
+const path = './data.json';
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.PGSSLMODE === 'require' ? { rejectUnauthorized: false } : false
-});
+module.exports = {
+    // Hàm tải dữ liệu từ file
+    loadData: (key) => {
+        if (!fs.existsSync(path)) {
+            // Nếu chưa có file, tạo file mới với cấu trúc rỗng
+            fs.writeFileSync(path, JSON.stringify({ global: {} }, null, 4));
+            return null;
+        }
+        try {
+            const raw = fs.readFileSync(path);
+            const data = JSON.parse(raw);
+            return data[key] || null;
+        } catch (e) {
+            console.error("❌ Lỗi đọc file DB:", e);
+            return null;
+        }
+    },
 
-let isInitialized = false;
-
-async function ensureTable() {
-  if (isInitialized) return;
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS bot_data (
-      key TEXT PRIMARY KEY,
-      data JSONB
-    );
-  `);
-  isInitialized = true;
-}
-
-async function loadData(key = 'global') {
-  await ensureTable();
-  const res = await pool.query('SELECT data FROM bot_data WHERE key = $1', [key]);
-  return res.rows.length === 0 ? null : res.rows[0].data;
-}
-
-async function saveData(dataObj, key = 'global') {
-  await ensureTable();
-  await pool.query(`
-    INSERT INTO bot_data(key, data)
-    VALUES($1, $2)
-    ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data
-  `, [key, dataObj]);
-}
-
-module.exports = { loadData, saveData, pool };
+    // Hàm lưu dữ liệu vào file
+    saveData: async (data, key) => {
+        try {
+            let currentData = {};
+            if (fs.existsSync(path)) {
+                currentData = JSON.parse(fs.readFileSync(path));
+            }
+            currentData[key] = data;
+            fs.writeFileSync(path, JSON.stringify(currentData, null, 4));
+            console.log("💾 Dữ liệu Skibidi Hub đã được sao lưu an toàn.");
+            return true;
+        } catch (e) {
+            console.error("❌ Lỗi ghi file DB:", e);
+            return false;
+        }
+    }
+};
