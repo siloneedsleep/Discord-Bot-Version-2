@@ -36,7 +36,7 @@ let data = {
     blacklist: [], 
     coOwners: [], 
     admins: [], 
-    allowedGuilds: ['ID_SERVER_CHÍNH_CỦA_BẠN'], 
+    allowedGuilds: [1410645959813107866], 
     crypto: {}, 
     mining: { pickaxe: {} }, 
     cooldowns: {},
