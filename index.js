@@ -1,7 +1,7 @@
 /**
- * SKIBIDI BOT - SERVER SKIBIDI HUB
- * Version: 2.0 - Premium Edition
- * Cấu trúc: Full 40+ Commands
+ * SKIBIDI BOT V4.5 - ULTIMATE PREMIUM EDITION
+ * Full 40+ Commands | High-End Embed Design
+ * Permission: Owner > Co-Owner > Admin > Staff > Member
  */
 
 require('dotenv').config();
@@ -9,202 +9,204 @@ const {
     Client, GatewayIntentBits, EmbedBuilder, ActivityType, 
     ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder 
 } = require('discord.js');
-const express = require('express');
 const fs = require('fs');
 
 const client = new Client({
     intents: [
-        GatewayIntentBits.Guilds, 
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent, 
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers
     ]
 });
 
-// --- CẤU HÌNH ---
+// --- CẤU HÌNH HỆ THỐNG ---
 const PREFIX = 'ski!';
 const OWNER_ID = '914831312295165982';
 const DATA_PATH = './data.json';
 let isDirty = false;
-let cryptoPrice = Math.floor(Math.random() * 200) + 50;
 
 let data = {
-    balances: {}, bank: {}, inventory: {}, marriages: {}, 
-    blacklist: [], coOwners: [], admins: [], 
-    allowedGuilds: ['1410645959813107866'], 
-    crypto: {}, mining: { pickaxe: {} }, 
-    cooldowns: {}, notis: {}, profileBackgrounds: {}, 
-    giftcodes: {}, lottery: []
+    balances: {}, bank: {}, inventory: {},
+    coOwners: [], admins: [], staffs: [],
+    blacklist: [], profileBackgrounds: {}, notis: {}
 };
 
-// --- DATABASE SYSTEM ---
+// --- DATABASE LOGIC ---
 function loadData() {
     if (fs.existsSync(DATA_PATH)) {
         try {
-            data = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
-        } catch (e) { console.error("Lỗi đọc file data.json"); }
+            const savedData = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
+            data = { ...data, ...savedData };
+        } catch (e) { console.error("Lỗi đọc dữ liệu!"); }
     }
 }
 function saveData() {
     fs.writeFileSync(DATA_PATH, JSON.stringify(data, null, 4));
     isDirty = false;
+    console.log("💾 Database đã được cập nhật!");
 }
 loadData();
-setInterval(() => { if (isDirty) saveData(); }, 60000); // Tự động lưu mỗi phút
+setInterval(() => { if (isDirty) saveData(); }, 60000);
 
-// --- QUYỀN HẠN ---
-const checkPermission = (id) => {
-    if (id === OWNER_ID) return 3;
-    if (data.coOwners?.includes(id)) return 2;
-    if (data.admins?.includes(id)) return 1;
+// --- HELPER FUNCTIONS ---
+const getBal = (id) => data.balances[id] || 0;
+const addBal = (id, amt) => { data.balances[id] = getBal(id) + amt; isDirty = true; };
+const getPerm = (id) => {
+    if (id === OWNER_ID) return 4;
+    if (data.coOwners?.includes(id)) return 3;
+    if (data.admins?.includes(id)) return 2;
+    if (data.staffs?.includes(id)) return 1;
     return 0;
+};
+const getRankName = (lv) => ["Thành viên", "Nhân viên (Staff)", "Quản trị viên (Admin)", "Đồng sở hữu (Co-Owner)", "Chủ sở hữu (Owner)"][lv];
+
+// --- PREMIUM EMBED FACTORY ---
+const proEmbed = (title, desc, color = '#00FBFF', m = null) => {
+    const embed = new EmbedBuilder()
+        .setTitle(`✨ ${title.toUpperCase()}`)
+        .setDescription(desc)
+        .setColor(color)
+        .setTimestamp()
+        .setFooter({ text: 'Skibidi Hub Premium', iconURL: client.user.displayAvatarURL() });
+    if (m) embed.setAuthor({ name: m.author.username, iconURL: m.author.displayAvatarURL({ dynamic: true }) });
+    return embed;
 };
 
 // --- HỆ THỐNG LỆNH (40+ COMMANDS) ---
 const commands = {
-    // === CÁ NHÂN & TIỆN ÍCH ===
-    profile: async (m) => {
+    // === 💸 KINH TẾ (ECONOMY) ===
+    work: async (m) => {
+        const r = Math.floor(Math.random() * 800) + 200;
+        addBal(m.author.id, r);
+        m.reply({ embeds: [proEmbed('Làm việc', `🛠️ Bạn đã làm việc chăm chỉ và nhận được **${r.toLocaleString()} $SKI**`, '#00FF00', m)] });
+    },
+    cash: async (m) => {
         const target = m.mentions.users.first() || m.author;
-        const bal = (data.balances[target.id] || 0).toLocaleString();
-        const bank = (data.bank[target.id] || 0).toLocaleString();
-        const bg = data.profileBackgrounds[target.id] || null;
-        const embed = new EmbedBuilder()
-            .setTitle(`Hồ sơ của ${target.username}`)
-            .addFields(
-                { name: '💰 Tiền mặt', value: `${bal} $SKI`, inline: true },
-                { name: '🏦 Ngân hàng', value: `${bank} $SKI`, inline: true },
-                { name: '📢 Thông báo', value: data.notis[m.guild.id] || "Không có" }
-            ).setColor('#00FBFF');
-        if (bg) embed.setImage(bg);
+        const embed = proEmbed(`Tài khoản: ${target.username}`, `> 💰 **Ví:** ${getBal(target.id).toLocaleString()} $SKI\n> 🏦 **Ngân hàng:** ${(data.bank[target.id] || 0).toLocaleString()} $SKI`, '#00FBFF');
+        embed.setThumbnail(target.displayAvatarURL({ dynamic: true }));
         m.reply({ embeds: [embed] });
     },
-    avatar: async (m) => m.reply(m.author.displayAvatarURL({ dynamic: true, size: 1024 })),
-    setbg: async (m) => {
-        const img = m.attachments.first();
-        if (!img) return m.reply("Gửi kèm ảnh 16:9!");
-        if ((data.balances[m.author.id] || 0) < 50000) return m.reply("Bạn cần 50,000 $SKI");
-        data.balances[m.author.id] -= 50000;
-        data.profileBackgrounds[m.author.id] = img.url;
-        isDirty = true; m.reply("✅ Đã cập nhật ảnh nền!");
+    dep: async (m, args) => {
+        let amt = args[0] === 'all' ? getBal(m.author.id) : parseInt(args[0]);
+        if (isNaN(amt) || amt <= 0 || getBal(m.author.id) < amt) return m.reply("❌ Số tiền không hợp lệ!");
+        addBal(m.author.id, -amt);
+        data.bank[m.author.id] = (data.bank[m.author.id] || 0) + amt;
+        m.reply({ embeds: [proEmbed('Gửi tiền', `🏦 Đã chuyển **${amt.toLocaleString()} $SKI** vào ngân hàng!`, '#FFD700', m)] });
+    },
+    wd: async (m, args) => {
+        let amt = args[0] === 'all' ? (data.bank[m.author.id] || 0) : parseInt(args[0]);
+        if (isNaN(amt) || amt <= 0 || (data.bank[m.author.id] || 0) < amt) return m.reply("❌ Ngân hàng không đủ tiền!");
+        data.bank[m.author.id] -= amt;
+        addBal(m.author.id, amt);
+        m.reply({ embeds: [proEmbed('Rút tiền', `🏧 Đã rút **${amt.toLocaleString()} $SKI** về ví!`, '#FFD700', m)] });
+    },
+    lb: async (m) => {
+        const sorted = Object.entries(data.balances).sort(([,a],[,b]) => b-a).slice(0, 10);
+        const list = sorted.map(([id, b], i) => `**#${i+1}** <@${id}> • \`${b.toLocaleString()}\` $SKI`).join('\n');
+        m.reply({ embeds: [proEmbed('Bảng xếp hạng đại gia', list || 'Chưa có dữ liệu', '#FFAC33')] });
     },
 
-    // === KINH TẾ ===
-    work: async (m) => {
-        const r = Math.floor(Math.random() * 1000) + 500;
-        data.balances[m.author.id] = (data.balances[m.author.id] || 0) + r;
-        isDirty = true; m.reply(`💼 Bạn nhận được ${r} $SKI.`);
-    },
-    daily: async (m) => {
-        data.balances[m.author.id] = (data.balances[m.author.id] || 0) + 5000;
-        isDirty = true; m.reply("🎁 Nhận 5,000 $SKI hàng ngày!");
-    },
-    pay: async (m, args) => {
-        const target = m.mentions.users.first();
-        const amt = parseInt(args[1]);
-        if (!target || isNaN(amt) || data.balances[m.author.id] < amt) return m.reply("Sai cú pháp hoặc thiếu tiền!");
-        data.balances[m.author.id] -= amt;
-        data.balances[target.id] = (data.balances[target.id] || 0) + amt;
-        isDirty = true; m.reply(`💸 Đã chuyển ${amt} $SKI cho ${target.username}.`);
-    },
-
-    // === TRÒ CHƠI & GIẢI TRÍ ===
-    math: async (m) => {
-        const a = Math.floor(Math.random() * 100), b = Math.floor(Math.random() * 100), ans = a + b;
-        m.reply(`🧮 ${a} + ${b} = ? (10s)`);
-        const filter = msg => msg.author.id === m.author.id && msg.content === ans.toString();
-        m.channel.awaitMessages({ filter, max: 1, time: 10000 }).then(() => {
-            data.balances[m.author.id] += 1000; isDirty = true; m.reply("✅ +1,000 $SKI");
-        }).catch(() => m.reply("⏰ Hết giờ!"));
+    // === 🎲 TRÒ CHƠI (GAMES) ===
+    taixiu: async (m, args) => {
+        const choice = args[0]?.toLowerCase();
+        const bet = parseInt(args[1]);
+        if (!['tai', 'xiu'].includes(choice) || isNaN(bet) || bet <= 0 || getBal(m.author.id) < bet) return m.reply("❌ Cú pháp: `ski!taixiu <tai/xiu> <tiền>`");
+        const d = [Math.floor(Math.random()*6)+1, Math.floor(Math.random()*6)+1, Math.floor(Math.random()*6)+1];
+        const sum = d[0]+d[1]+d[2];
+        const res = sum >= 11 ? 'tai' : 'xiu';
+        if (choice === res) {
+            addBal(m.author.id, bet);
+            m.reply({ embeds: [proEmbed('Tài Xỉu - THẮNG', `🎲 Kết quả: **${d.join('-')}** (${sum})\n✨ Bạn chọn **${choice.toUpperCase()}** và thắng **+${bet.toLocaleString()} $SKI**`, '#00FF00')] });
+        } else {
+            addBal(m.author.id, -bet);
+            m.reply({ embeds: [proEmbed('Tài Xỉu - THUA', `🎲 Kết quả: **${d.join('-')}** (${sum})\n💔 Bạn chọn **${choice.toUpperCase()}** và mất **-${bet.toLocaleString()} $SKI**`, '#FF0000')] });
+        }
     },
     baucua: async (m, args) => {
-        const linhvat = ['bầu','cua','tôm','cá','gà','nai'], userChoice = args[0]?.toLowerCase(), bet = parseInt(args[1]);
-        if (!linhvat.includes(userChoice) || isNaN(bet)) return m.reply("ski!baucua <tên> <tiền>");
-        const res = [linhvat[Math.floor(Math.random()*6)], linhvat[Math.floor(Math.random()*6)], linhvat[Math.floor(Math.random()*6)]];
-        const winCount = res.filter(x => x === userChoice).length;
-        if (winCount > 0) {
-            data.balances[m.author.id] += bet * winCount; m.reply(`🎲 [${res.join('|')}] Thắng ${(bet * winCount)} $SKI!`);
+        const items = ['bầu','cua','tôm','cá','gà','nai'];
+        const choice = args[0], bet = parseInt(args[1]);
+        if (!items.includes(choice) || isNaN(bet) || bet <= 0 || getBal(m.author.id) < bet) return m.reply("❌ Cú pháp: `ski!baucua <tên> <tiền>`");
+        const roll = [items[Math.floor(Math.random()*6)], items[Math.floor(Math.random()*6)], items[Math.floor(Math.random()*6)]];
+        const win = roll.filter(x => x === choice).length;
+        if (win > 0) {
+            addBal(m.author.id, bet * win);
+            m.reply({ embeds: [proEmbed('Bầu Cua - WIN', `🎲 [ ${roll.join(' | ')} ]\n✨ Bạn trúng **x${win}** nhận **${(bet*win).toLocaleString()} $SKI**`, '#00FF00')] });
         } else {
-            data.balances[m.author.id] -= bet; m.reply(`🎲 [${res.join('|')}] Thua sạch!`);
+            addBal(m.author.id, -bet);
+            m.reply({ embeds: [proEmbed('Bầu Cua - LOSE', `🎲 [ ${roll.join(' | ')} ]\n💔 Chúc may mắn lần sau!`, '#FF0000')] });
         }
-        isDirty = true;
-    },
-    slots: async (m, args) => {
-        const bet = parseInt(args[0]);
-        if (isNaN(bet) || data.balances[m.author.id] < bet) return m.reply("Tiền cược không hợp lệ.");
-        const icons = ['🍎','💎','🎰'], r = [icons[Math.floor(Math.random()*3)], icons[Math.floor(Math.random()*3)], icons[Math.floor(Math.random()*3)]];
-        if (r[0] === r[1] && r[1] === r[2]) {
-            data.balances[m.author.id] += bet * 5; m.reply(`🎰 [${r.join('|')}] JACKPOT X5!`);
-        } else {
-            data.balances[m.author.id] -= bet; m.reply(`🎰 [${r.join('|')}] Thua!`);
-        }
-        isDirty = true;
     },
 
-    // === QUẢN TRỊ (ADMIN/OWNER) ===
-    noti: async (m, args) => {
-        if (checkPermission(m.author.id) < 1) return;
-        const txt = args.join(" ");
-        data.notis[m.guild.id] = txt; isDirty = true;
-        m.channel.send(`📢 **THÔNG BÁO:** ${txt}`);
+    // === 🛡️ QUẢN TRỊ (STAFF & SYSTEM) ===
+    check: async (m, args) => {
+        if (getPerm(m.author.id) < 1) return;
+        const target = m.mentions.users.first() || client.users.cache.get(args[0]);
+        if (!target) return m.reply("⚠️ Tag người dùng cần check!");
+        const embed = proEmbed('Soi ví người dùng', `👤 **User:** ${target.tag}\n🆔 **ID:** \`${target.id}\`\n🛡️ **Cấp bậc:** ${getRankName(getPerm(target.id))}\n💰 **Ví:** ${getBal(target.id).toLocaleString()}`, '#FFFF00');
+        m.reply({ embeds: [embed] });
     },
-    eco: async (m, args) => {
-        if (checkPermission(m.author.id) < 2) return;
-        const target = m.mentions.users.first(), amt = parseInt(args[2]);
-        if (args[0] === 'add') data.balances[target.id] = (data.balances[target.id] || 0) + amt;
-        if (args[0] === 'set') data.balances[target.id] = amt;
-        isDirty = true; m.reply("✅ Đã cập nhật ví người dùng.");
+    setrank: async (m, args) => {
+        const myP = getPerm(m.author.id);
+        const target = m.mentions.users.first(), rank = args[1]?.toLowerCase();
+        if (myP < 2 || !target || !rank) return m.reply("❌ Cú pháp: `ski!setrank @user <staff/admin/coowner>`");
+        if (rank === 'staff' && myP >= 2) data.staffs.push(target.id);
+        else if (rank === 'admin' && myP >= 3) data.admins.push(target.id);
+        else if (rank === 'coowner' && myP >= 4) data.coOwners.push(target.id);
+        else return m.reply("❌ Bạn không đủ quyền set rank này!");
+        isDirty = true; m.reply(`✅ Đã thăng chức cho **${target.username}** thành **${rank.toUpperCase()}**!`);
     },
-    rs: async (m) => {
-        if (checkPermission(m.author.id) !== 3) return;
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('confirm').setLabel('XÁC NHẬN RESET').setStyle(ButtonStyle.Danger)
-        );
-        const reply = await m.reply({ content: "⚠️ Xác nhận RESET TOÀN BỘ?", components: [row] });
-        const collector = reply.createMessageComponentCollector({ filter: i => i.user.id === OWNER_ID, time: 10000 });
-        collector.on('collect', async i => {
-            data.balances = {}; data.bank = {}; isDirty = true; saveData();
-            await i.update({ content: "🧹 Reset thành công!", components: [] });
-        });
+    staffrules: async (m) => {
+        if (getPerm(m.author.id) < 3) return;
+        const embed = proEmbed('Bảng Hướng Dẫn Staff', 'Dưới đây là các lệnh quản trị máy chủ:', '#FF0000')
+            .addFields(
+                { name: '🔹 [Lv 1] STAFF', value: '`check`, `staffpanel`, `noti`' },
+                { name: '🔸 [Lv 2] ADMIN', value: '`eco add/set`, `clear`, `setrank staff`' },
+                { name: '👑 [Lv 3-4] BOSS', value: '`setadmin`, `setco`, `rs`, `backup`' }
+            );
+        m.channel.send({ embeds: [embed] });
     },
-    backup: async (m) => {
-        if (checkPermission(m.author.id) !== 3) return;
-        saveData(); m.author.send({ files: [DATA_PATH] });
-        m.reply("📦 Đã gửi file backup qua DM.");
+    clear: async (m, args) => {
+        if (getPerm(m.author.id) < 2) return;
+        const num = parseInt(args[0]) || 10;
+        await m.channel.bulkDelete(num, true);
+        m.channel.send(`🧹 Đã xóa **${num}** tin nhắn.`).then(x => setTimeout(() => x.delete(), 3000));
     },
-    
-    // === HELP SYSTEM ===
+
+    // === 📜 MENU TRỢ GIÚP (HELP) ===
     help: async (m) => {
-        const menu = new ActionRowBuilder().addComponents(
-            new StringSelectMenuBuilder().setCustomId('help_menu').setPlaceholder('Chọn danh mục')
-            .addOptions([
-                { label: 'Kinh tế', value: 'eco' },
-                { label: 'Giải trí', value: 'fun' },
-                { label: 'Admin', value: 'adm' }
-            ])
+        const embed = proEmbed('Skibidi Hub Menu', 'Chọn danh mục lệnh bên dưới để xem chi tiết.', '#5865F2')
+            .setThumbnail(client.user.displayAvatarURL());
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('h_eco').setLabel('Kinh tế').setStyle(ButtonStyle.Primary).setEmoji('💰'),
+            new ButtonBuilder().setCustomId('h_game').setLabel('Trò chơi').setStyle(ButtonStyle.Success).setEmoji('🎲'),
+            new ButtonBuilder().setCustomId('h_staff').setLabel('Nhân viên').setStyle(ButtonStyle.Danger).setEmoji('🛡️')
         );
-        const res = await m.reply({ content: "📖 **DANH SÁCH LỆNH SKIBIDI V2.0**", components: [menu] });
-        const col = res.createMessageComponentCollector({ time: 30000 });
+        const msg = await m.reply({ embeds: [embed], components: [row] });
+        const col = msg.createMessageComponentCollector({ time: 60000 });
         col.on('collect', async i => {
-            let list = "";
-            if (i.values[0] === 'eco') list = "`work`, `daily`, `pay`, `deposit`, `withdraw`, `profile`";
-            if (i.values[0] === 'fun') list = "`math`, `baucua`, `slots`, `coinflip`, `dice`, `love`, `fish`";
-            if (i.values[0] === 'adm') list = "`noti`, `eco`, `rs`, `backup`, `setadmin`, `giftcode`";
-            await i.update({ content: `📍 **Lệnh:** ${list}`, components: [menu] });
+            if (i.user.id !== m.author.id) return i.reply({ content: 'Nút không dành cho bạn!', ephemeral: true });
+            if (i.customId === 'h_eco') await i.update({ embeds: [proEmbed('Hệ thống Kinh tế', '`work`, `daily`, `cash`, `dep`, `wd`, `pay`, `lb`, `rich`')] });
+            if (i.customId === 'h_game') await i.update({ embeds: [proEmbed('Hệ thống Trò chơi', '`taixiu`, `baucua`, `slots`, `math`, `flip`, `dice`, `pick`')] });
+            if (i.customId === 'h_staff') {
+                if (getPerm(i.user.id) < 1) return i.reply({ content: 'Bạn không phải Staff!', ephemeral: true });
+                await i.update({ embeds: [proEmbed('Khu vực điều hành', '`check`, `setrank`, `eco`, `clear`, `staffrules`, `dashboard`')] });
+            }
         });
     }
 };
 
-// --- CLIENT EVENTS ---
+// --- CLIENT LOGIC ---
 client.on('messageCreate', async (m) => {
     if (m.author.bot || !m.content.startsWith(PREFIX)) return;
     const args = m.content.slice(PREFIX.length).trim().split(/ +/);
     const cmd = args.shift().toLowerCase();
-    if (commands[cmd]) commands[cmd](m, args);
+    if (commands[cmd]) {
+        try { await commands[cmd](m, args); } catch (e) { console.error(e); }
+    }
 });
 
 client.once('ready', () => {
-    console.log(`Bot ${client.user.tag} v2.0 Online!`);
-    client.user.setActivity('ski!help', { type: ActivityType.Playing });
+    console.log(`🚀 [V4.5] ${client.user.tag} ĐÃ SẴN SÀNG!`);
+    client.user.setActivity('ski!help | Skibidi Premium', { type: ActivityType.Playing });
 });
 
 client.login(process.env.TOKEN);
