@@ -1,4 +1,4 @@
-# 🚀 SKIBIDI BOT V2.0 - v2.0
+# 🚀 SKIBIDI BOT V2.0
 
 Bot quản lý kinh tế, giải trí và phân quyền chuyên nghiệp dành riêng cho **Skibidi Hub Server**. Được phát triển với kiến trúc hiện đại, tích hợp lưu trữ dữ liệu thời gian thực.
 
