@@ -1,6 +1,6 @@
 /**
- * SKIBIDI BOT V17.0 - BẢN ĐÃ CHỈNH SỬA ĐỂ HOST 24/7 TRÊN KOYEB
- * Đã xóa tự động out server | Đã thêm Web Server để giữ bot online
+ * SKIBIDI BOT V17.0 - BẢN TỐI ƯU CHO KOYEB
+ * Đã sửa lỗi kết nối mạng (IP 0.0.0.0) và Port để xem được Log.
  */
 
 require('dotenv').config();
@@ -9,28 +9,38 @@ const {
     ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType 
 } = require('discord.js');
 const fs = require('fs');
-const express = require('express'); // Thêm Express để chạy web server
+const express = require('express');
 
-// --- 🌐 WEB SERVER GIỮ BOT THỨC (DÀNH CHO KOYEB/UPTIMEROBOT) ---
+// --- 🌐 WEB SERVER (QUAN TRỌNG ĐỂ XEM ĐƯỢC LOG TRÊN KOYEB) ---
 const app = express();
+const port = process.env.PORT || 8000; // Koyeb ưu tiên cổng 8000 hoặc 8080
+
 app.get('/', (req, res) => res.send('Skibidi Bot đang chạy 24/7!'));
-app.listen(process.env.PORT || 8080, () => console.log('✅ Web Server đã sẵn sàng.'));
+
+// Cấu hình lắng nghe trên 0.0.0.0 để Koyeb có thể truy cập Health Check
+app.listen(port, '0.0.0.0', () => {
+    console.log('==============================================');
+    console.log(`✅ WEB SERVER ĐÃ SẴN SÀNG TẠI CỔNG: ${port}`);
+    console.log('==============================================');
+});
 
 // --- 🛡️ HỆ THỐNG CHỐNG SẬP ---
-process.on('unhandledRejection', (reason, promise) => console.error('❌ Lỗi chưa xử lý:', reason));
+process.on('unhandledRejection', (reason) => console.error('❌ Lỗi chưa xử lý:', reason));
 process.on('uncaughtException', (err) => console.error('❌ Lỗi nghiêm trọng:', err));
 
 const client = new Client({
     intents: [
-        GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers
+        GatewayIntentBits.Guilds, 
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent, 
+        GatewayIntentBits.GuildMembers
     ]
 });
 
 // --- ⚙️ CẤU HÌNH ---
 const PREFIX = 'ski!';
-const OWNER_ID = process.env.OWNER_ID || '914831312295165982'; // Ưu tiên lấy từ Koyeb
-const DATA_PATH = '/tmp/data.json'; // Dùng thư mục /tmp trên host
+const OWNER_ID = process.env.OWNER_ID || '914831312295165982';
+const DATA_PATH = '/tmp/data.json'; 
 
 let db = { 
     users: {}, 
@@ -38,10 +48,21 @@ let db = {
     globalNoti: "Chào mừng đến với Skibidi Hub!" 
 };
 
+// Khởi tạo database
 if (fs.existsSync(DATA_PATH)) {
-    try { db = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8')); } catch (e) { console.log("Khởi tạo db mới."); }
+    try { 
+        db = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8')); 
+    } catch (e) { 
+        console.log("Khởi tạo db mới."); 
+    }
 }
-const save = () => fs.writeFileSync(DATA_PATH, JSON.stringify(db, null, 4));
+const save = () => {
+    try {
+        fs.writeFileSync(DATA_PATH, JSON.stringify(db, null, 4));
+    } catch (e) {
+        console.error("Lỗi lưu file:", e);
+    }
+};
 
 const getU = (id) => {
     if (!db.users[id]) {
@@ -168,7 +189,6 @@ gameList.forEach(game => {
 client.on('messageCreate', async (m) => {
     try {
         if (m.author.bot || !m.guild) return;
-        // ĐÃ XÓA DÒNG TỰ ĐỘNG OUT SERVER ĐỂ BẠN TIỆN SỬ DỤNG
         if (!m.content.startsWith(PREFIX)) return;
         const args = m.content.slice(PREFIX.length).trim().split(/ +/);
         const cmd = args.shift().toLowerCase();
@@ -177,8 +197,15 @@ client.on('messageCreate', async (m) => {
 });
 
 client.once('ready', () => {
-    console.log(`✅ SKIBIDI SUPREME ONLINE AS ${client.user.tag}`);
+    console.log('==============================================');
+    console.log(`✅ DISCORD BOT ONLINE AS: ${client.user.tag}`);
+    console.log('==============================================');
     client.user.setActivity('ski!help | Skibidi Hub', { type: ActivityType.Watching });
 });
 
-client.login(process.env.TOKEN);
+// Kiểm tra Token trước khi login
+if (!process.env.TOKEN) {
+    console.error("❌ LỖI: Chưa có biến TOKEN trong Environment Variables của Koyeb!");
+} else {
+    client.login(process.env.TOKEN);
+}
