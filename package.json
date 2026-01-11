@@ -8,7 +8,13 @@
   },
   "dependencies": {
     "discord.js": "^14.16.3",
+    "@discordjs/util": "^1.1.1",
+    "@discordjs/rest": "^2.3.0",
+    "discord-api-types": "^0.37.101",
     "dotenv": "^16.4.5",
     "express": "^4.21.0"
+  },
+  "engines": {
+    "node": "20.x"
   }
 }
