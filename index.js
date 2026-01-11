@@ -1,78 +1,45 @@
-/**
- * SKIBIDI BOT V17.0 - BẢN TỐI ƯU CHO KOYEB
- * Đã sửa lỗi kết nối mạng (IP 0.0.0.0) và Port để xem được Log.
- */
-
 require('dotenv').config();
 const { 
     Client, GatewayIntentBits, EmbedBuilder, ActivityType, 
     ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType 
 } = require('discord.js');
-const fs = require('fs');
 const express = require('express');
+const mongoose = require('mongoose');
 
-// --- 🌐 WEB SERVER (QUAN TRỌNG ĐỂ XEM ĐƯỢC LOG TRÊN KOYEB) ---
+// --- 🌐 WEB SERVER (KOYEB) ---
 const app = express();
-const port = process.env.PORT || 8000; // Koyeb ưu tiên cổng 8000 hoặc 8080
+const port = process.env.PORT || 8000;
+app.get('/', (req, res) => res.send('Skibidi Bot 24/7 Online!'));
+app.listen(port, '0.0.0.0', () => console.log(`✅ Cổng kết nối: ${port}`));
 
-app.get('/', (req, res) => res.send('Skibidi Bot đang chạy 24/7!'));
+// --- 🛡️ CHỐNG SẬP ---
+process.on('unhandledRejection', (r) => console.error('❌ Lỗi:', r));
+process.on('uncaughtException', (e) => console.error('❌ Lỗi:', e));
 
-// Cấu hình lắng nghe trên 0.0.0.0 để Koyeb có thể truy cập Health Check
-app.listen(port, '0.0.0.0', () => {
-    console.log('==============================================');
-    console.log(`✅ WEB SERVER ĐÃ SẴN SÀNG TẠI CỔNG: ${port}`);
-    console.log('==============================================');
-});
+// --- 💾 DATABASE (MONGODB) ---
+const MONGO_URI = process.env.MONGO_URI; 
+mongoose.connect(MONGO_URI).then(() => console.log("✅ DB CONNECTED")).catch(e => console.error(e));
 
-// --- 🛡️ HỆ THỐNG CHỐNG SẬP ---
-process.on('unhandledRejection', (reason) => console.error('❌ Lỗi chưa xử lý:', reason));
-process.on('uncaughtException', (err) => console.error('❌ Lỗi nghiêm trọng:', err));
+const User = mongoose.model('User', new mongoose.Schema({
+    id: String, bal: { type: Number, default: 5000 }, perm: { type: Number, default: 0 }, 
+    bio: { type: String, default: "Member của Skibidi Hub" }, cover: { type: String, default: "https://i.imgur.com/8f8ZpL8.png" }
+}));
 
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds, 
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent, 
-        GatewayIntentBits.GuildMembers
-    ]
-});
+const Global = mongoose.model('Global', new mongoose.Schema({ id: String, noti: String, whitelist: Array }));
+
+const Gift = mongoose.model('Gift', new mongoose.Schema({
+    code: String, amount: Number, limit: Number, usedBy: Array, expires: Date
+}));
 
 // --- ⚙️ CẤU HÌNH ---
 const PREFIX = 'ski!';
 const OWNER_ID = process.env.OWNER_ID || '914831312295165982';
-const DATA_PATH = '/tmp/data.json'; 
 
-let db = { 
-    users: {}, 
-    whitelist: [], 
-    globalNoti: "Chào mừng đến với Skibidi Hub!" 
-};
-
-// Khởi tạo database
-if (fs.existsSync(DATA_PATH)) {
-    try { 
-        db = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8')); 
-    } catch (e) { 
-        console.log("Khởi tạo db mới."); 
-    }
+async function getU(id) {
+    let u = await User.findOne({ id });
+    if (!u) { u = new User({ id, perm: (id === OWNER_ID ? 3 : 0) }); await u.save(); }
+    return u;
 }
-const save = () => {
-    try {
-        fs.writeFileSync(DATA_PATH, JSON.stringify(db, null, 4));
-    } catch (e) {
-        console.error("Lỗi lưu file:", e);
-    }
-};
-
-const getU = (id) => {
-    if (!db.users[id]) {
-        db.users[id] = {
-            bal: 5000, bank: 0, perm: (id === OWNER_ID ? 3 : 0),
-            bio: "Member của Skibidi Hub", cover: "https://i.imgur.com/8f8ZpL8.png"
-        };
-    }
-    return db.users[id];
-};
 
 const gameList = [
     'dabong', 'bongro', 'caulong', 'dua_xe', 'chay_bo', 'boi_loi', 'hit_dat', 'nhay_day', 'ban_cung', 'keo_co',
@@ -87,125 +54,86 @@ const commands = {
     // 👑 QUẢN TRỊ
     addserver: async (m, args) => {
         if (m.author.id !== OWNER_ID) return;
-        const id = args[0] || m.guild.id;
-        if (!db.whitelist.includes(id)) db.whitelist.push(id);
-        save(); m.reply(`✅ Đã thêm server \`${id}\` vào Whitelist.`);
+        await Global.findOneAndUpdate({ id: "main" }, { $addToSet: { whitelist: args[0] || m.guild.id } }, { upsert: true });
+        m.reply("✅ Đã thêm server vào Whitelist.");
     },
     noti: async (m, args) => {
-        if (getU(m.author.id).perm < 2) return m.reply("❌ Cần quyền Co-Owner!");
-        const channel = m.mentions.channels.first();
-        const content = args.slice(1).join(' ');
-        if (!channel || !content) return m.reply("❌ Cú pháp: `ski!noti #kênh <nội dung>`");
-        db.globalNoti = content; save();
-        const emb = new EmbedBuilder().setTitle('📢 THÔNG BÁO').setDescription(`${content}\n\n👉 *Xem chi tiết trong Bio (\`ski!profile\`)*`).setColor('#FF0000');
-        channel.send({ content: "@everyone", embeds: [emb] }).catch(() => m.reply("❌ Bot thiếu quyền gửi tin vào kênh đó!"));
-        m.reply("✅ Đã gửi thông báo.");
+        if ((await getU(m.author.id)).perm < 2) return;
+        const channel = m.mentions.channels.first(); const content = args.slice(1).join(' ');
+        if (!channel || !content) return m.reply("❌ `ski!noti #kênh nội dung` ");
+        await Global.findOneAndUpdate({ id: "main" }, { noti: content }, { upsert: true });
+        channel.send({ content: "@everyone", embeds: [new EmbedBuilder().setTitle('📢 THÔNG BÁO').setDescription(content).setColor('#FF0000')] });
     },
     co: async (m) => {
         if (m.author.id !== OWNER_ID) return;
         const target = m.mentions.users.first();
-        if (target) { getU(target.id).perm = 2; save(); m.reply(`👑 **${target.username}** -> Co-Owner.`); }
+        if (target) { let u = await getU(target.id); u.perm = 2; await u.save(); m.reply(`👑 **${target.username}** -> Co-Owner.`); }
     },
-    ad: async (m) => {
-        if (getU(m.author.id).perm < 2) return;
-        const target = m.mentions.users.first();
-        if (target) { getU(target.id).perm = 1; save(); m.reply(`🛡️ **${target.username}** -> Admin.`); }
+    editcash: async (m, args) => {
+        if ((await getU(m.author.id)).perm < 2) return;
+        const target = m.mentions.users.first(); const amount = parseInt(args[1]);
+        if (!target || isNaN(amount)) return m.reply("❌ `ski!editcash @user <số_tiền>`");
+        let u = await getU(target.id); u.bal += amount; await u.save();
+        m.reply(`✅ Đã chỉnh sửa tiền cho **${target.username}**.`);
     },
-    resetall: async (m) => {
-        if (m.author.id !== OWNER_ID) return;
-        db.users = {}; save(); m.reply("🚨 Đã Reset toàn bộ dữ liệu người dùng!");
+    addgift: async (m, args) => {
+        if ((await getU(m.author.id)).perm < 2) return;
+        const [code, amount, limit, days] = [args[0], parseInt(args[1]), parseInt(args[2]), parseInt(args[3]) || 7];
+        if (!code || !amount || !limit) return m.reply("❌ `ski!addgift code tiền lượt_nhập ngày` ");
+        const exp = new Date(); exp.setDate(exp.getDate() + days);
+        await Gift.create({ code, amount, limit, usedBy: [], expires: exp });
+        m.reply(`🎁 Đã tạo Code: **${code}** (${limit} lượt)`);
     },
-    setcover: async (m, args) => {
-        if (getU(m.author.id).perm < 2) return;
-        const target = m.mentions.users.first();
-        const url = args[1];
-        if (target && url) { getU(target.id).cover = url; save(); m.reply("🖼️ Đã đổi ảnh bìa."); }
+    listcode: async (m) => {
+        if ((await getU(m.author.id)).perm < 1) return;
+        const codes = await Gift.find(); let txt = "📜 **GIFTCODE:**\n";
+        codes.forEach(c => txt += `• **${c.code}**: ${c.usedBy.length}/${c.limit} lượt | Hạn: ${c.expires.toLocaleDateString()}\n`);
+        m.reply(txt || "Chưa có code nào.");
     },
 
-    // 💰 KINH TẾ & BIO
+    // 💰 KINH TẾ
     profile: async (m) => {
-        const target = m.mentions.users.first() || m.author;
-        const u = getU(target.id);
-        const ranks = ["Thành viên", "Quản Trị Viên", "Đồng Sở Hữu", "Chủ Sở Hữu"];
-        const embed = new EmbedBuilder()
-            .setTitle(`Hồ sơ: ${target.username}`).setColor('#00FBFF')
-            .setImage(u.cover).setThumbnail(target.displayAvatarURL())
-            .addFields(
-                { name: '🛡️ Cấp bậc', value: ranks[u.perm], inline: true },
-                { name: '💰 Ví tiền', value: `${u.bal.toLocaleString()} $SKI`, inline: true },
-                { name: '📢 THÔNG BÁO MỚI', value: `\`\`\`${db.globalNoti}\`\`\`` },
-                { name: '📝 Tiểu sử', value: u.bio }
-            );
-        m.reply({ embeds: [embed] });
+        const target = m.mentions.users.first() || m.author; const u = await getU(target.id);
+        const g = await Global.findOne({ id: "main" }) || { noti: "Welcome!" };
+        const ranks = ["Thành viên", "Quản Trị", "Co-Owner", "Owner"];
+        const emb = new EmbedBuilder().setTitle(`Hồ sơ: ${target.username}`).setColor('#00FBFF').setImage(u.cover).setThumbnail(target.displayAvatarURL())
+            .addFields({ name: '🛡️ Cấp bậc', value: ranks[u.perm] || "Thành viên", inline: true }, { name: '💰 Ví tiền', value: `${u.bal.toLocaleString()} $SKI`, inline: true }, { name: '📢 THÔNG BÁO', value: `\`\`\`${g.noti}\`\`\`` }, { name: '📝 Tiểu sử', value: u.bio });
+        m.reply({ embeds: [emb] });
     },
-    mine: async (m) => {
-        let u = getU(m.author.id);
-        let find = Math.floor(Math.random() * 500) + 100;
-        u.bal += find; save(); m.reply(`⛏️ Bạn nhận được **${find} $SKI**!`);
+    send: async (m, args) => {
+        const target = m.mentions.users.first(); const amount = parseInt(args[1]);
+        if (!target || isNaN(amount) || amount <= 0 || target.id === m.author.id) return m.reply("❌ Sai cú pháp hoặc số tiền!");
+        let s = await getU(m.author.id); if (s.bal < amount) return m.reply("❌ Bạn không đủ tiền!");
+        let r = await getU(target.id); s.bal -= amount; r.bal += amount;
+        await s.save(); await r.save(); m.reply(`✅ Đã gửi **${amount} $SKI** cho **${target.username}**.`);
     },
-    daily: async (m) => {
-        let u = getU(m.author.id);
-        u.bal += 5000; save(); m.reply("🎁 Nhận **5,000 $SKI** quà điểm danh!");
+    giftcode: async (m, args) => {
+        const gift = await Gift.findOne({ code: args[0] });
+        if (!gift || new Date() > gift.expires || gift.usedBy.length >= gift.limit || gift.usedBy.includes(m.author.id)) return m.reply("❌ Code sai, hết hạn hoặc bạn đã dùng rồi!");
+        let u = await getU(m.author.id); u.bal += gift.amount; gift.usedBy.push(m.author.id);
+        await u.save(); await gift.save(); m.reply(`🎉 Nhận thành công **${gift.amount} $SKI**!`);
     },
-    cash: async (m) => {
-        m.reply(`💰 Bạn đang có **${getU(m.author.id).bal.toLocaleString()} $SKI**.`);
-    },
-
-    // 📖 HELP & LIST
-    help: async (m) => {
-        const embedMain = new EmbedBuilder().setTitle('📖 HELP MENU').setDescription('Chọn mục bằng nút bấm bên dưới.').setColor('#00FBFF');
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('h_admin').setLabel('👑 Quản Trị').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('h_eco').setLabel('💰 Kinh Tế').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('h_game').setLabel('🎮 60+ Games').setStyle(ButtonStyle.Primary)
-        );
-        const msg = await m.reply({ embeds: [embedMain], components: [row] });
-        const collector = msg.createMessageComponentCollector({ componentType: ComponentType.Button, time: 30000 });
-        collector.on('collect', async i => {
-            if (i.user.id !== m.author.id) return i.reply({ content: 'Không dành cho bạn!', ephemeral: true });
-            let desc = i.customId === 'h_admin' ? "`addserver`, `noti`, `co`, `ad`, `resetall`, `setcover`" : 
-                       i.customId === 'h_eco' ? "`profile`, `mine`, `cash`, `daily`" : "Gõ `ski!listgames` để xem 60 trò chơi vận động!";
-            await i.update({ embeds: [new EmbedBuilder().setTitle('CHI TIẾT LỆNH').setDescription(desc).setColor('#00FBFF')] });
-        });
-    },
-    listgames: async (m) => {
-        m.reply(`🎮 **60 TRÒ CHƠI LÀNH MẠNH:**\n\`${gameList.join(', ')}\``);
-    }
+    mine: async (m) => { let u = await getU(m.author.id); let f = Math.floor(Math.random() * 500) + 100; u.bal += f; await u.save(); m.reply(`⛏️ +${f} $SKI!`); },
+    daily: async (m) => { let u = await getU(m.author.id); u.bal += 5000; await u.save(); m.reply("🎁 +5,000 $SKI!"); },
+    help: async (m) => { m.reply("📖 **Lệnh:** `profile`, `mine`, `cash`, `daily`, `send`, `giftcode`, `listgames`\n👑 **Admin:** `addgift`, `listcode`, `editcash`, `noti`, `co`..."); },
+    listgames: async (m) => { m.reply(`🎮 **GAMES:** \`${gameList.join(', ')}\``); }
 };
 
-// --- 🔥 AUTO GAME ENGINE ---
-gameList.forEach(game => {
-    commands[game] = async (m, args) => {
-        let u = getU(m.author.id);
-        let bet = parseInt(args[0]) || 500;
-        if (u.bal < bet) return m.reply("❌ Bạn không đủ $SKI để tham gia!");
-        let win = Math.random() < 0.5;
-        u.bal += win ? bet : -bet; save();
-        m.reply(win ? `🏆 [${game.toUpperCase()}] Thắng! Bạn nhận được **+${bet} $SKI**` : `💪 [${game.toUpperCase()}] Thua! Bạn mất **-${bet} $SKI** năng lượng.`);
+gameList.forEach(g => {
+    commands[g] = async (m, args) => {
+        let u = await getU(m.author.id); let b = parseInt(args[0]) || 500;
+        if (u.bal < b) return m.reply("❌ Không đủ tiền!");
+        let w = Math.random() < 0.5; u.bal += w ? b : -b; await u.save();
+        m.reply(w ? `🏆 [${g.toUpperCase()}] Thắng +${b}` : `💪 [${g.toUpperCase()}] Thua -${b}`);
     };
 });
 
-// --- 🚀 KHỞI CHẠY ---
+const client = new Client({ intents: [3276799] });
 client.on('messageCreate', async (m) => {
-    try {
-        if (m.author.bot || !m.guild) return;
-        if (!m.content.startsWith(PREFIX)) return;
-        const args = m.content.slice(PREFIX.length).trim().split(/ +/);
-        const cmd = args.shift().toLowerCase();
-        if (commands[cmd]) await commands[cmd](m, args);
-    } catch (e) { console.error("Lỗi tin nhắn:", e); }
+    if (m.author.bot || !m.content.startsWith(PREFIX)) return;
+    const args = m.content.slice(PREFIX.length).trim().split(/ +/);
+    const cmd = args.shift().toLowerCase();
+    if (commands[cmd]) await commands[cmd](m, args);
 });
-
-client.once('ready', () => {
-    console.log('==============================================');
-    console.log(`✅ DISCORD BOT ONLINE AS: ${client.user.tag}`);
-    console.log('==============================================');
-    client.user.setActivity('ski!help | Skibidi Hub', { type: ActivityType.Watching });
-});
-
-// Kiểm tra Token trước khi login
-if (!process.env.TOKEN) {
-    console.error("❌ LỖI: Chưa có biến TOKEN trong Environment Variables của Koyeb!");
-} else {
-    client.login(process.env.TOKEN);
-}
+client.once('ready', () => { console.log(`✅ ${client.user.tag} ONLINE!`); client.user.setActivity('ski!help'); });
+client.login(process.env.TOKEN);
