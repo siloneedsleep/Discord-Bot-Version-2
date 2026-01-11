@@ -1,4 +1,4 @@
-# 🚀 SKIBIDI BOT V4.5 - PREMIUM EDITION
+# 🚀 SKIBIDI BOT V2.0 - PREMIUM EDITION
 
 Bot quản lý kinh tế, giải trí và phân quyền chuyên nghiệp dành riêng cho Skibidi Hub Server. 
 Được phát triển trên nền tảng Discord.js v14 với cấu trúc All-in-one tối ưu.
@@ -44,4 +44,4 @@ Bot quản lý kinh tế, giải trí và phân quyền chuyên nghiệp dành r
 
 ## 👤 DEVELOPER
 - Author: ski_shimano
-- Version: 4.5.0 (Premium)
+- Version: 2.0.0 (Premium)
