@@ -1,6 +1,6 @@
 /**
- * SKIBIDI BOT V17.0 - BẢN ĐẦY ĐỦ NHẤT (FULL OPTION)
- * Chống sập | 60 Games Lành mạnh | Nút bấm Help | Thông báo Bio | Phân quyền 3 cấp
+ * SKIBIDI BOT V17.0 - BẢN ĐÃ CHỈNH SỬA ĐỂ HOST 24/7 TRÊN KOYEB
+ * Đã xóa tự động out server | Đã thêm Web Server để giữ bot online
  */
 
 require('dotenv').config();
@@ -9,8 +9,14 @@ const {
     ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType 
 } = require('discord.js');
 const fs = require('fs');
+const express = require('express'); // Thêm Express để chạy web server
 
-// --- 🛡️ HỆ THỐNG CHỐNG SẬP (GLOBAL ERROR HANDLING) ---
+// --- 🌐 WEB SERVER GIỮ BOT THỨC (DÀNH CHO KOYEB/UPTIMEROBOT) ---
+const app = express();
+app.get('/', (req, res) => res.send('Skibidi Bot đang chạy 24/7!'));
+app.listen(process.env.PORT || 8080, () => console.log('✅ Web Server đã sẵn sàng.'));
+
+// --- 🛡️ HỆ THỐNG CHỐNG SẬP ---
 process.on('unhandledRejection', (reason, promise) => console.error('❌ Lỗi chưa xử lý:', reason));
 process.on('uncaughtException', (err) => console.error('❌ Lỗi nghiêm trọng:', err));
 
@@ -23,8 +29,8 @@ const client = new Client({
 
 // --- ⚙️ CẤU HÌNH ---
 const PREFIX = 'ski!';
-const OWNER_ID = '914831312295165982'; 
-const DATA_PATH = './data.json';
+const OWNER_ID = process.env.OWNER_ID || '914831312295165982'; // Ưu tiên lấy từ Koyeb
+const DATA_PATH = '/tmp/data.json'; // Dùng thư mục /tmp trên host
 
 let db = { 
     users: {}, 
@@ -47,7 +53,6 @@ const getU = (id) => {
     return db.users[id];
 };
 
-// --- 🎮 DANH SÁCH 60 TRÒ CHƠI HÀNH ĐỘNG/THỂ THAO (KHÔNG BÀI BẠC) ---
 const gameList = [
     'dabong', 'bongro', 'caulong', 'dua_xe', 'chay_bo', 'boi_loi', 'hit_dat', 'nhay_day', 'ban_cung', 'keo_co',
     'vat_tay', 'leo_nui', 'ban_sung_son', 'cau_ca', 'trong_cay', 'yoga', 'skibidi_dance', 'toilet_race', 'camera_fight', 'titan_battle',
@@ -57,7 +62,6 @@ const gameList = [
     'thach_dau', 'dai_chien', 'cuop_co', 'nhay_xa', 'nem_ta', 'ban_sung_nuoc', 'kham_pha', 'chup_anh', 'quay_phim', 'du_lich'
 ];
 
-// --- 📜 HỆ THỐNG LỆNH ---
 const commands = {
     // 👑 QUẢN TRỊ
     addserver: async (m, args) => {
@@ -164,8 +168,7 @@ gameList.forEach(game => {
 client.on('messageCreate', async (m) => {
     try {
         if (m.author.bot || !m.guild) return;
-        // Tự động out nếu không phải Whitelist (đã mở lại để bảo mật)
-        if (!db.whitelist.includes(m.guild.id) && m.author.id !== OWNER_ID && !m.content.includes('addserver')) return m.guild.leave();
+        // ĐÃ XÓA DÒNG TỰ ĐỘNG OUT SERVER ĐỂ BẠN TIỆN SỬ DỤNG
         if (!m.content.startsWith(PREFIX)) return;
         const args = m.content.slice(PREFIX.length).trim().split(/ +/);
         const cmd = args.shift().toLowerCase();
