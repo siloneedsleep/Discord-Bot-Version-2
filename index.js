@@ -116,39 +116,153 @@ const commands = {
 
     // --- CÁC LỆNH CŨ (GIỮ NGUYÊN & TỐI ƯU) ---
     profile: async (m) => {
-        const target = m.mentions.users.first() || m.author; const u = await getU(target.id);
-        const emb = new EmbedBuilder().setTitle(`Hồ sơ: ${target.username}`).setColor('#00FBFF').setImage(u.cover).setThumbnail(target.displayAvatarURL())
-            .addFields({ name: '🛡️ Cấp bậc', value: `\`${["Thành viên", "Quản Trị", "Co-Owner", "Owner"][u.perm]}\``, inline: true }, { name: '💰 Ví tiền', value: `**${u.bal.toLocaleString()} $SKI**`, inline: true }, { name: '📝 Tiểu sử', value: u.bio });
+        const target = m.mentions.users.first() || m.author; 
+        const u = await getU(target.id);
+        const emb = new EmbedBuilder()
+            .setTitle(`Hồ sơ: ${target.username}`)
+            .setColor('#00FBFF')
+            .setImage(u.cover)
+            .setThumbnail(target.displayAvatarURL())
+            .addFields(
+                { name: '🛡️ Cấp bậc', value: `${["Thành viên", "Quản Trị", "Co-Owner", "Owner"][u.perm]}`, inline: true }, 
+                { name: '💰 Ví tiền', value: `**${u.bal.toLocaleString()} $SKI**`, inline: true }, 
+                { name: '📝 Tiểu sử', value: u.bio }
+            );
         m.reply({ embeds: [emb] });
     },
-    daily: async (m) => { 
-        let u = await getU(m.author.id); u.bal += 5000; await u.save(); 
+    
+daily: async (m) => { 
+        let u = await getU(m.author.id); 
+        u.bal += 5000; 
+        await u.save(); 
         m.reply({ embeds: [new EmbedBuilder().setColor('#00FF00').setTitle('🎁 QUÀ HÀNG NGÀY').setDescription(`Bạn đã nhận được **5,000 $SKI**!`)] }); 
     },
+    
     help: async (m) => { 
-        const emb = new EmbedBuilder().setTitle('📖 DANH SÁCH LỆNH').setColor('#FFFFFF').addFields(
-            { name: '💰 Kiếm tiền', value: '`mine`, `cau_ca`, `daily`, `giftcode`' },
-            { name: '🎮 Giải trí', value: '`profile`, `send`, `listgames`' },
-            { name: '👑 Admin', value: '`addgift`, `editcash`, `noti`' }
-        );
+        const emb = new EmbedBuilder()
+            .setTitle('📖 DANH SÁCH LỆNH')
+            .setColor('#FFFFFF')
+            .addFields(
+                { name: '💰 Kiếm tiền', value: '`mine`, `cau_ca`, `daily`, `giftcode`' },
+                { name: '🎮 Giải trí', value: '`profile`, `send`, `listgames`, `dabong`, `bongro`, `caulong`, `dua_xe`, `skibidi_dance`, `titan_battle`' },
+                { name: '👑 Admin', value: '`addgift`, `editcash`, `noti`' }
+            );
         m.reply({ embeds: [emb] }); 
     },
-    giftcode: async (m, args) => {
+    
+giftcode: async (m, args) => {
+        if (!args[0]) return m.reply("❌ Vui lòng nhập mã code!");
         const gift = await Gift.findOne({ code: args[0] });
-        if (!gift || new Date() > gift.expires || gift.usedBy.length >= gift.limit || gift.usedBy.includes(m.author.id)) return m.reply("❌ Code sai hoặc đã dùng.");
-        let u = await getU(m.author.id); u.bal += gift.amount; gift.usedBy.push(m.author.id);
-        await u.save(); await gift.save(); 
+        if (!gift || new Date() > gift.expires || gift.usedBy.length >= gift.limit || gift.usedBy.includes(m.author.id)) 
+            return m.reply("❌ Code sai hoặc đã dùng.");
+        let u = await getU(m.author.id); 
+        u.bal += gift.amount; 
+        gift.usedBy.push(m.author.id);
+        await u.save(); 
+        await gift.save(); 
         m.reply({ embeds: [new EmbedBuilder().setColor('#FF00FF').setDescription(`🎉 Bạn nhận được **${gift.amount.toLocaleString()} $SKI**!`)] });
+    },
+
+    // 👑 LỆNH ADMIN
+    addgift: async (m, args) => {
+        let u = await getU(m.author.id);
+        if (u.perm < 2) return m.reply("❌ Bạn không đủ quyền!");
+        
+        const code = args[0];
+        const amount = parseInt(args[1]);
+        const limit = parseInt(args[2]) || 100;
+        const hours = parseInt(args[3]) || 24;
+        
+        if (!code || !amount) return m.reply("❌ Cú pháp: `ski!addgift <code> <amount> <limit> <hours>`");
+        
+        const expires = new Date(Date.now() + hours * 3600000);
+        const gift = new Gift({ code, amount, limit, usedBy: [], expires });
+        await gift.save();
+        
+        m.reply({ embeds: [new EmbedBuilder().setColor('#00FF00').setTitle('✅ Tạo Code Thành Công').setDescription(`${code} - ${amount}$SKI - Hạn: ${hours}h`)] });
+    },
+
+    editcash: async (m, args) => {
+        let u = await getU(m.author.id);
+        if (u.perm < 2) return m.reply("❌ Bạn không đủ quyền!");
+        
+        const target = m.mentions.users.first();
+        const amount = parseInt(args[1]);
+        
+        if (!target || !amount) return m.reply("❌ Cú pháp: `ski!editcash <@user> <amount>`");
+        
+        let tu = await getU(target.id);
+        tu.bal = amount;
+        await tu.save();
+        
+        m.reply({ embeds: [new EmbedBuilder().setColor('#00FF00').setDescription(`✅ Đã sửa tiền **${target.username}** thành **${amount.toLocaleString()} $SKI**`)] });
+    },
+
+    noti: async (m, args) => {
+        let u = await getU(m.author.id);
+        if (u.perm < 3) return m.reply("❌ Chỉ Owner mới dùng được!");
+        
+        const noti = args.join(' ');
+        if (!noti) return m.reply("❌ Cú pháp: `ski!noti <nội dung thông báo>`");
+        
+        const channel = m.channel;
+        channel.send({ 
+            embeds: [new EmbedBuilder()
+                .setTitle('📢 THÔNG BÁO TỪ ADMIN')
+                .setColor('#FF0000')
+                .setDescription(noti)
+                .setTimestamp()
+            ] 
+        });
+    },
+
+    send: async (m, args) => {
+        const target = m.mentions.users.first();
+        const amount = parseInt(args[1]);
+        
+        if (!target || !amount) return m.reply("❌ Cú pháp: `ski!send <@user> <amount>`");
+        if (target.id === m.author.id) return m.reply("❌ Không thể gửi tiền cho chính mình!");
+        
+        let u = await getU(m.author.id);
+        if (u.bal < amount) return m.reply("❌ Không đủ tiền!");
+        
+        let tu = await getU(target.id);
+        u.bal -= amount;
+        tu.bal += amount;
+        
+        await u.save();
+        await tu.save();
+        
+        m.reply({ embeds: [new EmbedBuilder().setColor('#00FF00').setDescription(`✅ Đã gửi **${amount.toLocaleString()} $SKI** cho **${target.username}**`)] });
+    },
+
+    listgames: async (m) => {
+        const emb = new EmbedBuilder()
+            .setTitle('🎮 DANH SÁCH GAME')
+            .setColor('#9B59B6')
+            .addFields(
+                { name: 'Cược Tiền', value: '`dabong`, `bongro`, `caulong`, `dua_xe`, `skibidi_dance`, `titan_battle`' },
+                { name: 'Cách Chơi', value: '`ski!<game> <amount>` - Ví dụ: `ski!dabong 1000`' }
+            );
+        m.reply({ embeds: [emb] });
     }
 };
 
 // Game betting system
 gameList.forEach(g => {
     commands[g] = async (m, args) => {
-        let u = await getU(m.author.id); let b = parseInt(args[0]) || 500;
+        let u = await getU(m.author.id); 
+        let b = parseInt(args[0]) || 500;
         if (u.bal < b) return m.reply("❌ Không đủ tiền!");
-        let w = Math.random() < 0.5; u.bal += w ? b : -b; await u.save();
-        const emb = new EmbedBuilder().setTitle(`🎮 ${g.toUpperCase()}`).setDescription(w ? `🏆 **THẮNG!** +${b.toLocaleString()}` : `💀 **THUA!** -${b.toLocaleString()}`).setColor(w ? '#00FF00' : '#FF0000');
+        
+        let w = Math.random() < 0.5; 
+        u.bal += w ? b : -b; 
+        await u.save();
+        
+        const emb = new EmbedBuilder()
+            .setTitle(`🎮 ${g.toUpperCase()}`)
+            .setDescription(w ? `🏆 **THẮNG!** +${b.toLocaleString()}` : `💀 **THUA!** -${b.toLocaleString()}`)
+            .setColor(w ? '#00FF00' : '#FF0000');
         m.reply({ embeds: [emb] });
     };
 });
